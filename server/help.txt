@@ -1,0 +1,286 @@
+//delete Profile
+export const deleteProfile = tryCatchAsyncError(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  const followers = user.followers;
+  const following = user.following;
+  const userId = user.id;
+
+  if (!user) {
+    return next(new ErrorHandler("User not found!", 404));
+  }
+
+  // Delete user's avatar image if it exists
+  if (user.avatar) {
+    const avatarFilename = path.basename(user.avatar.url);
+    const avatarImagePath = path.join("public", "gallery", avatarFilename);
+    await fsPromises.unlink(avatarImagePath);
+  }
+
+  // Delete user's posts and associated images
+  const postsToDelete = await Post.find({ _id: { $in: user.posts } });
+
+  for (const post of postsToDelete) {
+    if (post.postImg) {
+      const postImageFilename = path.basename(post.postImg.url);
+      const postImagePath = path.join("public", "gallery", postImageFilename);
+      await fsPromises.unlink(postImagePath);
+    }
+    await post.deleteOne();
+  }
+
+  //removing user from followers following
+  for (let i = 0; i < followers.length; i++) {
+    const follower = await User.findById(followers[i]);
+
+    const index = follower.following.indexOf(userId);
+    follower.following.splice(index, 1);
+    await follower.save();
+  }
+
+  //removing user from followings followers
+  for (let i = 0; i < following.length; i++) {
+    const follows = await User.findById(following[i]);
+
+    const index = follows.followers.indexOf(userId);
+    follows.followers.splice(index, 1);
+    await follows.save();
+  }
+
+  // Delete user
+  await user.deleteOne();
+
+  // Logout user after deleting the profile
+  res.cookie("token", null, { expires: new Date(0), httpOnly: true });
+
+  res.status(200).json({
+    success: true,
+    message: "Profile deleted!",
+  });
+});
+
+//addComment
+export const addComment = tryCatchAsyncError(async (req, res, next) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return next(new ErrorHandler("post not found!", 404));
+
+  let commentIndex = -1;
+
+  //checking if comment already exist
+  post.comments.forEach((item, index) => {
+    if (item.user.toString() === req.user.id.toString()) {
+      commentIndex = index;
+    }
+  });
+
+  if (commentIndex !== -1) {
+    post.comments[commentIndex].comment = req.body.comment;
+    await post.save();
+    return res.status(200).json({
+      success: true,
+      message: "comment updated!",
+    });
+  } else {
+    post.comments.push({
+      user: req.user.id,
+      comment: req.body.comment,
+    });
+
+    await post.save();
+    return res.status(200).json({
+      success: true,
+      message: "comment added!",
+    });
+  }
+});
+
+//delete comment
+export const deleteComment = tryCatchAsyncError(async (req, res, next) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return next(new ErrorHandler("post not found!", 404));
+
+  if (post.owner.toString() === req.user.id.toString()) {
+    if (req.body.commentId == undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "commentId is required!",
+      });
+    }
+    post.comments.forEach((item, index) => {
+      if (item._id.toString() === req.body.commentId.toString()) {
+        return post.comments.splice(index, 1);
+      }
+    });
+    await post.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Selected comment deleted!",
+    });
+  } else {
+    post.comments.forEach((item, index) => {
+      if (item.user.toString() === req.user.id.toString()) {
+        return post.comments.splice(index, 1);
+      }
+    });
+    await post.save();
+    return res.status(200).json({
+      success: true,
+      message: "comment remove",
+    });
+  }
+});
+
+
+
+//delete comment
+export const deleteComment = tryCatchAsyncError(async (req, res, next) => {
+  const postId = req.params.id;
+  const commentId = req.body.commentId;
+
+  const post = await Post.findById(postId);
+
+  if (!post) {
+    return next(new ErrorHandler("Post not found!", 404));
+  }
+
+  const isOwner = post.owner.toString() === req.user.id.toString();
+
+  const commentIndex = post.comments.findIndex(
+    (comment) => comment._id.toString() === commentId
+  );
+
+  if (commentIndex === -1) {
+    return next(new ErrorHandler("comment not found!", 404));
+  }
+
+  const isCommentOwner =
+    post.comments[commentIndex].user.toString() === req.user.id.toString();
+
+  if (isOwner || isCommentOwner) {
+    post.comments.splice(commentIndex, 1);
+    await post.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Comment deleted!",
+    });
+  }
+
+  return next(new ErrorHandler("your are not authorized", 403));
+});
+
+
+  <div className="relative">
+          {isAuthenticated ? (
+            <>
+              <button
+                className="flex items-center text-red-600 py-2 px-4"
+                onClick={toggleDropdown}
+              >
+                <div className="flex items-center">
+                  {user?.avatar?.url ? (
+                    <img
+                      src={user?.avatar?.url}
+                      alt="User Avatar"
+                      className="w-8 h-8 rounded-full mr-2"
+                    />
+                  ) : (
+                    <FaUserCircle className="w-8 h-8 text-gray-500 mr-2" />
+                  )}
+                  <span>{user?.fullName}</span>
+                </div>
+                <FaAngleDown className="ml-2" />
+              </button>
+
+              {isOpen && (
+                <ul
+                  className="absolute right-0 mt-2 py-2 w-48 bg-white border border-gray-300 rounded shadow"
+                  style={{ zIndex: "9999" }}
+                >
+                  <li className="my-1">
+                    <Link
+                      to="/account/information"
+                      className="px-4 py-2 text-gray-800 hover:text-red-600"
+                    >
+                      <FaUser className="inline-block mr-2" /> Profile
+                    </Link>
+                  </li>
+                  {user && user?.role === "admin" && (
+                    <li className="my-1">
+                      <Link
+                        to="/admin/dashboard"
+                        className="px-4 py-2 text-gray-800 hover:text-red-600"
+                      >
+                        <FaChartBar className="inline-block mr-2" />
+                        Dashboard
+                      </Link>
+                    </li>
+                  )}
+                  <li>
+                    <button
+                      className="px-4 py-2 text-gray-800"
+                      onClick={handleLogout}
+                    >
+                      <FaSignOutAlt className="inline-block mr-2" />
+                      Logout
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </>
+          ) : (
+           //here add /account part
+          )}
+        </div>
+
+
+        //update profile
+        export const updateProfile = tryCatchAsyncError(async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    return next(new ErrorHandler("User not found!", 404));
+  }
+
+  const { fullName, dob, gender, bio } = req.body;
+
+  // Preserve the existing avatar URL
+  const existingImageUrl = user.avatar ? user.avatar.url : null;
+
+  // Update the user's full name
+  user.fullName = fullName;
+  user.dob = dob;
+  user.gender = gender;
+  user.bio = bio;
+
+  // Save the user changes
+  await user.save();
+
+  // Update the avatar URL only if a new image is being uploaded
+  if (req.file) {
+    const baseUrl = `${req.protocol}://${req.hostname}:${
+      process.env.PORT || 5000
+    }`;
+    const avatarPath = req.file.filename;
+    const avatarImageUrl = `${baseUrl}/gallery/${avatarPath}`.replace(
+      /\\/g,
+      "/"
+    );
+
+    // Delete previous image if it's not the same as the newly uploaded image
+    if (existingImageUrl && existingImageUrl !== avatarImageUrl) {
+      const filename = path.basename(existingImageUrl);
+      const previousImagePath = path.join("public", "gallery", filename);
+      fs.unlinkSync(previousImagePath);
+    }
+
+    // Update the avatar URL
+    user.avatar = { url: avatarImageUrl };
+    await user.save();
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Profile update success!",
+    data: user,
+  });
+});
