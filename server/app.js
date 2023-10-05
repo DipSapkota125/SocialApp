@@ -33,6 +33,8 @@ app.use("/api/v1", postRoute);
 app.use("/api/v1", userRoute);
 //img load in browser
 app.use("/gallery", express.static("public/gallery"));
+//video load in browser
+app.use("/videos", express.static("public/videos"));
 
 //errorHandling
 app.use(errorListening);

@@ -225,3 +225,41 @@ export const myPosts = tryCatchAsyncError(async (req, res, next) => {
     data: posts,
   });
 });
+
+//uploadReel
+export const uploadReel = tryCatchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  const { title, description } = req.body;
+  console.log("body", req.body);
+  if (!title || !description) {
+    return next(new ErrorHandler("please filled required field", 400));
+  }
+
+  const post = await Post.findById(id);
+  if (!post) return next(new ErrorHandler("postID not found", 404));
+
+  const baseUrl = `${req.protocol}://${req.hostname}:${
+    process.env.PORT || 5000
+  }`;
+  const videoPath = req.file ? req.file.filename : undefined;
+
+  let courseVideoUrl;
+
+  if (videoPath) {
+    courseVideoUrl = `${baseUrl}/videos/${videoPath}`.replace(/\\/g, "/");
+  }
+
+  post.reels.push({
+    title,
+    description,
+    video: courseVideoUrl ? { url: courseVideoUrl } : undefined,
+  });
+
+  await post.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Reel added to the post",
+    data: post,
+  });
+});

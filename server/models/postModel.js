@@ -9,6 +9,21 @@ const postSchema = new mongoose.Schema({
       type: String,
     },
   },
+  reels: [
+    {
+      title: {
+        type: String,
+      },
+      description: {
+        type: String,
+      },
+      video: {
+        url: {
+          type: String,
+        },
+      },
+    },
+  ],
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

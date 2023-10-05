@@ -8,10 +8,12 @@ import {
   myPosts,
   postOfFollowing,
   updateCaption,
+  uploadReel,
 } from "../controllers/postController.js";
 import { isAuthenticated } from "../middlewares/auth.js";
 import upload from "../file/upload.js";
 import { userPosts } from "../controllers/userController.js";
+import uploadVideo from "../video/video.js";
 const router = express.Router();
 
 //createPost
@@ -41,4 +43,9 @@ router.route("/my/posts").get(isAuthenticated, myPosts);
 
 //get user posts
 router.route("/user-posts/:id").get(isAuthenticated, userPosts);
+
+//upload Reel;
+router
+  .route("/create/reel/:id")
+  .post(isAuthenticated, uploadVideo.single("video"), uploadReel);
 export default router;
